@@ -63,9 +63,12 @@ class Net(nn.Module):
 
         # network structure
         self.student_emb = nn.Embedding(S, K)
+        self.ans_embed = nn.Linear(H, K)
         self.k_difficulty = nn.Embedding(E, K - d)
-        self.code_emb = nn.Linear(H, d)
+        self.ans_embed = nn.Linear(H, d)
         self.e_discrimination = nn.Embedding(E, 1)
+
+        self.liner = nn.Linear(K * 2, K)
 
         self.prednet_full1 = nn.Linear(K, self.len1)
         self.drop_1 = nn.Dropout(p=0.5)
@@ -89,14 +92,15 @@ class Net(nn.Module):
         """
         # before prednet
         stu_emb = torch.sigmoid(self.student_emb(stu_id))
+        code_emb = torch.sigmoid(self.code_embed(ans_embedding))
         k_difficulty = torch.sigmoid(self.k_difficulty(exer_id))
-        code_emb = torch.sigmoid(self.code_emb(ans_embedding))
+        ans_emb = torch.sigmoid(self.ans_embed(ans_embedding))
         e_discrimination = torch.sigmoid(self.e_discrimination(exer_id)) * 10
 
-        similarity = calculate_similarity(code_embedding, ans_embedding)
-
         # prednet
-        input_x = e_discrimination * (similarity * stu_emb - torch.cat((k_difficulty, code_emb), dim=1)) * kn_emb
+        input_x = e_discrimination * (
+                    self.liner(torch.cat((stu_emb, code_emb), dim=1)) - torch.cat((k_difficulty, ans_emb),
+                                                                                  dim=1)) * kn_emb
         input_x = self.drop_1(torch.sigmoid(self.prednet_full1(input_x)))
         input_x = self.drop_2(torch.sigmoid(self.prednet_full2(input_x)))
         output = torch.sigmoid(self.prednet_full3(input_x))
@@ -222,7 +226,7 @@ def validate(net, ep):
 
         code_embeddings = encode_code(codes)
 
-        output = net.forward(user_ids, exer_ids, kn_embs, ans_embedding,code_embeddings)
+        output = net.forward(user_ids, exer_ids, kn_embs, ans_embedding, code_embeddings)
 
         output = output.view(-1)
         # compute accuracy
