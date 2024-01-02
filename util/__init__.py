@@ -19,10 +19,10 @@ class CodeDataset(Dataset):
         return len(self.dataframe)
 
     def __getitem__(self, idx):
-        code = self.dataframe.iloc[idx]['标准答案']
+        code = self.dataframe.iloc[idx]['code']
 
         return {
-            'exer_id': self.dataframe.iloc[idx]['题目id'],
+            'exer_id': self.dataframe.iloc[idx]['exer_id'],
             'code': code
         }
 

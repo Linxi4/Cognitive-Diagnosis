@@ -63,7 +63,7 @@ class Net(nn.Module):
 
         # network structure
         self.student_emb = nn.Embedding(S, K)
-        self.ans_embed = nn.Linear(H, K)
+        self.code_embed = nn.Linear(H, K)
         self.k_difficulty = nn.Embedding(E, K - d)
         self.ans_embed = nn.Linear(H, d)
         self.e_discrimination = nn.Embedding(E, 1)
@@ -92,7 +92,7 @@ class Net(nn.Module):
         """
         # before prednet
         stu_emb = torch.sigmoid(self.student_emb(stu_id))
-        code_emb = torch.sigmoid(self.code_embed(ans_embedding))
+        code_emb = torch.sigmoid(self.code_embed(code_embedding))
         k_difficulty = torch.sigmoid(self.k_difficulty(exer_id))
         ans_emb = torch.sigmoid(self.ans_embed(ans_embedding))
         e_discrimination = torch.sigmoid(self.e_discrimination(exer_id)) * 10
@@ -154,9 +154,9 @@ class MyDataSet(Dataset):
 
 
 def encode_code(code):
-    inputs = tokenizer.encode(code, return_tensors="pt").to(device)
+    inputs = tokenizer(code, return_tensors="pt", padding=True, truncation=True).to(device)
 
-    outputs = model(inputs)
+    outputs = model(**inputs)
     last_hidden_states = outputs.last_hidden_state
 
     # You can use the mean of the last layer's hidden states as the representation of the code
@@ -191,7 +191,7 @@ def train():
 
             user_ids, exer_ids, kn_embs, ans_embeddings, labels, codes = batch
 
-            code_embeddings = encode_code(codes).to(device)
+            code_embeddings = encode_code(list(codes)).to(device)
 
             output_1 = net.forward(user_ids, exer_ids, kn_embs, ans_embeddings, code_embeddings)
             output_0 = torch.ones(output_1.size()).to(device) - output_1
