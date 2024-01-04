@@ -30,7 +30,7 @@ H = 768
 # 代码所占维度
 d = K // 2
 
-lr = 0.02
+lr = 0.002
 epoch = 10
 batch_size = 512
 shuffle = True
@@ -89,8 +89,10 @@ class Net(nn.Module):
 
         # prednet
         input_x = e_discrimination * (stu_emb - torch.cat((k_difficulty, code_emb), dim=1)) * kn_emb
-        input_x = self.drop_1(torch.sigmoid(self.prednet_full1(input_x)))
-        input_x = self.drop_2(torch.sigmoid(self.prednet_full2(input_x)))
+        # input_x = self.drop_1(torch.sigmoid(self.prednet_full1(input_x)))
+        # input_x = self.drop_2(torch.sigmoid(self.prednet_full2(input_x)))
+        input_x = (torch.sigmoid(self.prednet_full1(input_x)))
+        input_x = (torch.sigmoid(self.prednet_full2(input_x)))
         output = torch.sigmoid(self.prednet_full3(input_x))
 
         return output
@@ -138,7 +140,7 @@ class MyDataSet(Dataset):
         ans_embedding = ans_embedding_dict[log["exer_id"]]
         return torch.tensor(log['user_id'] - 1).to(device), torch.tensor(log["exer_id"] - 1).to(device), torch.tensor(
             knowledge_emb).to(device), torch.tensor(ans_embedding).to(device), torch.tensor(int(log['score'])).to(
-            device), log['code']
+            device)
 
 
 def train():
@@ -157,7 +159,7 @@ def train():
         for batch in train_loader:
             optimizer.zero_grad()
 
-            user_ids, exer_ids, kn_embs, ans_embeddings, labels, codes = batch
+            user_ids, exer_ids, kn_embs, ans_embeddings, labels = batch
 
             output_1 = net.forward(user_ids, exer_ids, kn_embs, ans_embeddings)
             output_0 = torch.ones(output_1.size()).to(device) - output_1
@@ -188,7 +190,7 @@ def validate(net, ep):
     correct_count, exer_count = 0, 0
     pred_all, label_all = [], []
     for batch in val_loader:
-        user_ids, exer_ids, kn_embs, ans_embedding, labels, codes = batch
+        user_ids, exer_ids, kn_embs, ans_embedding, labels = batch
 
         output = net.forward(user_ids, exer_ids, kn_embs, ans_embedding)
 

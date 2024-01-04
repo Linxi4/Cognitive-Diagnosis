@@ -148,13 +148,14 @@ class MyDataSet(Dataset):
         for knowledge_code in log['knowledge_code']:
             knowledge_emb[knowledge_code - 1] = 1.0
         ans_embedding = ans_embedding_dict[log["exer_id"]]
+        code_tokens = tokenizer.tokenize(log['code'])
         return torch.tensor(log['user_id'] - 1).to(device), torch.tensor(log["exer_id"] - 1).to(device), torch.tensor(
             knowledge_emb).to(device), torch.tensor(ans_embedding).to(device), torch.tensor(int(log['score'])).to(
             device), log['code']
 
 
 def encode_code(code):
-    inputs = tokenizer(code, return_tensors="pt", padding=True, truncation=True).to(device)
+    inputs = tokenizer.tokenize(code, return_tensors="pt", padding=True, truncation=True).to(device)
 
     outputs = model(**inputs)
     last_hidden_states = outputs.last_hidden_state

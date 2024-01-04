@@ -3,6 +3,8 @@ import random
 from tqdm import tqdm
 import json
 import pandas as pd
+from transformers import AutoTokenizer, AutoModel
+import torch
 
 exer_path = '../data/origin/题目数据集.csv'
 log_path = '../data/origin/学生序列数据.txt'
@@ -185,15 +187,15 @@ def divide_data():
         for log in stu_train['logs']:
             max_exer_id = max(max_exer_id, log['exer_id'])
             train_set.append({'user_id': user_id, 'exer_id': log['exer_id'], 'score': log['score'],
-                              'knowledge_code': log['knowledge_code'], 'code': log['code']})
+                              'knowledge_code': log['knowledge_code']})
         for log in stu_val['logs']:
             max_exer_id = max(max_exer_id, log['exer_id'])
             val_set.append({'user_id': user_id, 'exer_id': log['exer_id'], 'score': log['score'],
-                            'knowledge_code': log['knowledge_code'], 'code': log['code']})
+                            'knowledge_code': log['knowledge_code']})
         for log in stu_test['logs']:
             max_exer_id = max(max_exer_id, log['exer_id'])
             test_set.append({'user_id': user_id, 'exer_id': log['exer_id'], 'score': log['score'],
-                             'knowledge_code': log['knowledge_code'], 'code': log['code']})
+                             'knowledge_code': log['knowledge_code']})
     random.shuffle(train_set)
     random.shuffle(val_set)
     random.shuffle(test_set)
@@ -213,10 +215,60 @@ def divide_data():
         json.dump(test_set, output_file, indent=2, ensure_ascii=False)
 
 
+def te():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    tokenizer = AutoTokenizer.from_pretrained("microsoft/codebert-base")
+    model = AutoModel.from_pretrained("microsoft/codebert-base").to(device)
+
+    data = json.load(open('../data/with_code/log_data.json', encoding='utf8'))
+    code_dict = {}
+    new_data = []
+    submit_id = 1
+    for user in tqdm(data):
+        user_id, log_num, logs = user['user_id'], user['log_num'], user['logs']
+        temp = {'user_id': user_id, 'log_num': log_num}
+        new_logs = []
+        for log in logs:
+            log['submit_id'] = submit_id
+            log['score'] = 1 if log['score'] == 1.0 else 0
+            exer_id, user_id, score, kn = log['exer_id'], log['user_id'], log['score'], log['knowledge_code']
+            code_dict[submit_id] = log['code']
+            new_log = {'exer_id': exer_id, 'user_id': user_id, 'score': score, 'submit_id': submit_id,
+                       'knowledge_code': kn}
+            new_logs.append(new_log)
+            submit_id += 1
+        temp['logs'] = new_logs
+        new_data.append(temp)
+    with open('../data/with_code/new_log_data.json', 'w', encoding='utf8') as output_file:
+        json.dump(new_data, output_file, indent=2, ensure_ascii=False)
+
+    data = []
+    submit_ids, codes = zip(*code_dict.items())
+    batch_size = 128
+    for idx in tqdm(range(0, len(submit_ids), batch_size)):
+        # 处理批量代码片段
+        ids = submit_ids[idx:idx + batch_size]
+        code = codes[idx:idx + batch_size]
+        token = tokenizer(code, return_tensors="pt", padding=True, truncation=True).to(device)
+
+        # 提取表示
+        with torch.no_grad():
+            output = model(**token)
+
+        embedding = output.last_hidden_state[:, 0, :]  # 获取批量CLS向量
+        for i in range(len(ids)):
+            data.append({"submit_id": ids[i],
+                         "code": code[i],
+                         "embedding": embedding[i]})
+    df_embedding = pd.DataFrame(data)
+    df_embedding.to_csv(open('../data/with_code/submit_embedding.csv', 'w', encoding='utf8'))
+
+
 if __name__ == '__main__':
     # create_records()
     # show_data()
     # clean_data()
     # format_data()
     divide_data()
+    # te()
     pass
