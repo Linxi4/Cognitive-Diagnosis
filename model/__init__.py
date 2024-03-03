@@ -110,7 +110,7 @@ def filterData():
         new_logs = []
 
         for log in logs:
-            exer_id  = log['exer_id']
+            exer_id = log['exer_id']
             if exer_id in question_dict:
                 new_log_num += 1
                 new_logs.append(log)
@@ -169,4 +169,7 @@ def codeBertEnCoder(code):
 
 if __name__ == '__main__':
     # filterData()
-    divide_data()
+    # divide_data()
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(torch.cuda.get_device_name())
+

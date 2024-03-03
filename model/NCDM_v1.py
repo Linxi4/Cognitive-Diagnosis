@@ -26,23 +26,26 @@ S = 3824
 E = 5977
 K = 28
 # codeBert的输出维度
-H = 768
+D = 768
 # 代码所占维度
-d = K // 2
+d1 = 256
+d2 = 128
+d3 = K
 
-lr = 0.002
+lr = 0.01
 epoch = 10
 batch_size = 512
 shuffle = True
 
-# 加载题目代码的embedding
 with open(evalPath + '/param.txt', 'a', encoding='utf8') as f:
     f.write('v2\n')
     f.write('learn_rate= %f, epoch= %d, batch_size= %d, shuffle= %s \n' % (lr, epoch, batch_size, shuffle))
 
-df = pd.read_csv("../data/with_code/code_embedding.csv", encoding='utf8')
-df['embedding'] = df['embedding'].apply(ast.literal_eval)
-ans_embedding_dict = df.set_index('exer_id')['embedding'].to_dict()  # 题目参考代码的embedding
+# 加载题目代码的embedding
+with open('../data/with_code/code_embeddings.json', 'r') as f:
+    code_embeddings_dict = json.load(f)
+with open('../data/with_code/text_embeddings.json', 'r') as f:
+    text_embeddings_dict = json.load(f)
 
 
 class Net(nn.Module):
@@ -57,9 +60,17 @@ class Net(nn.Module):
 
         # network structure
         self.student_emb = nn.Embedding(S, K)
-        self.k_difficulty = nn.Embedding(E, K - d)
-        self.code_emb = nn.Linear(H, d)
-        self.e_discrimination = nn.Embedding(E, 1)
+        # self.exer_emb = nn.Embedding(E, K)
+
+
+        self.code_emb1 = nn.Linear(D, d1)
+        self.code_emb2 = nn.Linear(d1, d2)
+        self.code_emb3 = nn.Linear(d2, d3)
+        self.text_emb1 = nn.Linear(D, d1)
+        self.text_emb2 = nn.Linear(d1, d2)
+        self.text_emb3 = nn.Linear(d2, d3)
+        self.exer_emb = nn.Linear(d3*2, K)
+        self.e_discrimination = nn.Linear(K, 1)
 
         self.prednet_full1 = nn.Linear(K, self.len1)
         self.drop_1 = nn.Dropout(p=0.5)
@@ -72,10 +83,10 @@ class Net(nn.Module):
             if 'weight' in name:
                 nn.init.xavier_normal_(param)
 
-    def forward(self, stu_id, exer_id, kn_emb, ans_embedding):
+    def forward(self, stu_id, exer_id, kn_emb, code_embedding, text_embedding):
         """
-        :param code_embedding: 提交代码embedding
-        :param ans_embedding: 参考代码embedding
+        :param code_embedding: 参考代码embedding
+        :param text_embedding: 题目文本embedding
         :param stu_id: LongTensor
         :param exer_id: LongTensor
         :param kn_emb: FloatTensor, the knowledge relevancy vectors
@@ -83,15 +94,22 @@ class Net(nn.Module):
         """
         # before prednet
         stu_emb = torch.sigmoid(self.student_emb(stu_id))
-        k_difficulty = torch.sigmoid(self.k_difficulty(exer_id))
-        code_emb = torch.sigmoid(self.code_emb(ans_embedding))
-        e_discrimination = torch.sigmoid(self.e_discrimination(exer_id)) * 10
+        # exer_emb = torch.sigmoid(self.exer_emb(exer_id))
+
+        code_emb = torch.sigmoid(self.code_emb3(self.code_emb2(self.code_emb1(code_embedding))))
+        text_emb = torch.sigmoid(self.text_emb3(self.text_emb2(self.text_emb1(text_embedding))))
+        exer_emb = self.exer_emb(torch.cat((code_emb,text_emb),dim=1))
+        e_discrimination = torch.sigmoid(self.e_discrimination(exer_emb)) * 10
+
+        # 交互函数
+        r = e_discrimination * (stu_emb - exer_emb * kn_emb)
+
 
         # prednet
-        input_x = e_discrimination * (stu_emb - torch.cat((k_difficulty, code_emb), dim=1)) * kn_emb
+        # input_x = e_discrimination * (stu_emb - torch.cat((k_difficulty, code_emb), dim=1)) * kn_emb
         # input_x = self.drop_1(torch.sigmoid(self.prednet_full1(input_x)))
         # input_x = self.drop_2(torch.sigmoid(self.prednet_full2(input_x)))
-        input_x = (torch.sigmoid(self.prednet_full1(input_x)))
+        input_x = (torch.sigmoid(self.prednet_full1(r)))
         input_x = (torch.sigmoid(self.prednet_full2(input_x)))
         output = torch.sigmoid(self.prednet_full3(input_x))
 
@@ -137,10 +155,11 @@ class MyDataSet(Dataset):
         log = self.data[idx]
         for knowledge_code in log['knowledge_code']:
             knowledge_emb[knowledge_code - 1] = 1.0
-        ans_embedding = ans_embedding_dict[log["exer_id"]]
+        code_embedding = code_embeddings_dict[str(log["exer_id"])]
+        text_embedding = text_embeddings_dict[str(log["exer_id"])]
         return torch.tensor(log['user_id'] - 1).to(device), torch.tensor(log["exer_id"] - 1).to(device), torch.tensor(
-            knowledge_emb).to(device), torch.tensor(ans_embedding).to(device), torch.tensor(int(log['score'])).to(
-            device)
+            knowledge_emb).to(device), torch.tensor(code_embedding).to(device), torch.tensor(text_embedding).to(
+            device), torch.tensor(int(log['score'])).to(device)
 
 
 def train():
@@ -159,9 +178,9 @@ def train():
         for batch in train_loader:
             optimizer.zero_grad()
 
-            user_ids, exer_ids, kn_embs, ans_embeddings, labels = batch
+            user_ids, exer_ids, kn_embs, code_embeddings, text_embeddings, labels = batch
 
-            output_1 = net.forward(user_ids, exer_ids, kn_embs, ans_embeddings)
+            output_1 = net.forward(user_ids, exer_ids, kn_embs, code_embeddings, text_embeddings)
             output_0 = torch.ones(output_1.size()).to(device) - output_1
             output = torch.cat((output_0, output_1), 1)
 
@@ -190,9 +209,9 @@ def validate(net, ep):
     correct_count, exer_count = 0, 0
     pred_all, label_all = [], []
     for batch in val_loader:
-        user_ids, exer_ids, kn_embs, ans_embedding, labels = batch
+        user_ids, exer_ids, kn_embs, code_embeddings, text_embeddings, labels = batch
 
-        output = net.forward(user_ids, exer_ids, kn_embs, ans_embedding)
+        output = net.forward(user_ids, exer_ids, kn_embs, code_embeddings, text_embeddings)
 
         output = output.view(-1)
         # compute accuracy

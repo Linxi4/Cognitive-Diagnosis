@@ -103,7 +103,13 @@ def clean_data():
     :return:
     """
     exer_info = pd.read_csv(open(exer_path, 'r', encoding='utf8'))
-    exer_dict = exer_info.set_index('题目id')['标准答案'].to_dict()
+    # 过滤出题目描述为空的行
+    empty_description_df = exer_info[exer_info['题目描述'].isna()]
+    empty_code_df = exer_info[exer_info['标准答案'].isna()]
+    # 获取这些行的题目id，并存入集合中
+    to_remove = set(empty_description_df['题目id'])
+    to_remove = to_remove.union(set(empty_code_df['题目id']))
+
     cnt = 0
     records = json.load(open(folder + '/records.json', 'r', encoding='utf8'))
     new_records = []
@@ -111,9 +117,7 @@ def clean_data():
     for record in tqdm(records):
         exer_id = record.get('exer_id')
         kn = record.get('knowledge_code')
-        code = record.get('code', '')
-        ans = exer_dict.get(exer_id, '')
-        if isinstance(ans, str) and len(ans) >= 10 and isinstance(code, str) and len(code) >= 10 and len(kn) > 0:
+        if len(kn) > 0 and exer_id not in to_remove:
             new_records.append(record)
             cnt += 1
     print(cnt)
@@ -267,8 +271,7 @@ def te():
 if __name__ == '__main__':
     # create_records()
     # show_data()
-    # clean_data()
-    # format_data()
+    clean_data()
+    format_data()
     divide_data()
     # te()
-    pass

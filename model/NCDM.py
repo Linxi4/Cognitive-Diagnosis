@@ -15,7 +15,8 @@ dataPath = "../data/with_code"
 now = datetime.datetime.now().strftime('%Y-%m-%d %H %M')
 snapPath = resultPath + "/NCDM/" + now + "/snapshot"
 evalPath = resultPath + "/NCDM/" + now
-os.makedirs(snapPath)
+if not os.path.exists(snapPath):
+    os.makedirs(snapPath)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
@@ -24,9 +25,9 @@ S = 3824
 E = 5977
 K = 28
 
-lr = 0.02
+lr = 0.002
 epoch = 10
-batch_size = 128
+batch_size = 256
 shuffle = True
 
 with open(evalPath + '/param.txt', 'a', encoding='utf8') as f:
@@ -123,7 +124,7 @@ class MyDataSet(Dataset):
 
 def train():
     train_set = MyDataSet(dataPath + "/train_set.json")
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle, num_workers=6)
 
     net = Net().to(device)
     optimizer = optim.Adam(net.parameters(), lr=lr)
@@ -161,7 +162,7 @@ def train():
 
 def validate(net, ep):
     val_set = MyDataSet(dataPath + "/val_set.json")
-    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=shuffle)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=shuffle, num_workers=6)
     net.eval()
 
     correct_count, exer_count = 0, 0

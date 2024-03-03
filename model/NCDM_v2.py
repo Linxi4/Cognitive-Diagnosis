@@ -12,6 +12,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import datetime
 import os
 import pandas as pd
+import requests
 
 resultPath = "../result"
 dataPath = "../data/with_code"
