@@ -11,13 +11,11 @@ import datetime
 import os
 import pandas as pd
 
+now = datetime.datetime.now().strftime('%Y-%m-%d %H %M')
 resultPath = "../result"
 dataPath = "../data/with_code"
-now = datetime.datetime.now().strftime('%Y-%m-%d %H %M')
-snapPath = resultPath + "/NCDM_C/" + now + "/snapshot"
-evalPath = resultPath + "/NCDM_C/" + now
-if not os.path.exists(snapPath):
-    os.makedirs(snapPath)
+snapPath = resultPath + "/NCDM_TC/" + now + "/snapshot"
+evalPath = resultPath + "/NCDM_TC/" + now
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
@@ -28,17 +26,13 @@ K = 28
 # codeBert的输出维度
 D = 768
 
-d = K//2
+d = K // 2
+alpha = 0.5
 
 lr = 0.002
 epoch = 10
 batch_size = 256
 shuffle = True
-
-with open(evalPath + '/param.txt', 'a', encoding='utf8') as f:
-    f.write('v2\n')
-    f.write('learn_rate= %f, epoch= %d, batch_size= %d, shuffle= %s \n' % (lr, epoch, batch_size, shuffle))
-    f.write('code_embedding拼接exer_embedding')
 
 # 加载题目代码的embedding
 # df = pd.read_csv("../data/with_code/code_embedding.csv", encoding='utf8')
@@ -62,10 +56,10 @@ class Net(nn.Module):
 
         # network structure
         self.student_emb = nn.Embedding(S, K)
-        self.exer_emb = nn.Embedding(E, K - d)
+        self.exer_emb = nn.Embedding(E, K)
 
-        self.code_emb1 = nn.Linear(D, d)
-        self.text_emb1 = nn.Linear(D, d)
+        self.code_emb1 = nn.Linear(D, K)
+        self.text_emb1 = nn.Linear(D, K)
         self.e_discrimination = nn.Embedding(E, 1)
 
         self.prednet_full1 = nn.Linear(K, self.len1)
@@ -94,7 +88,7 @@ class Net(nn.Module):
 
         code_emb = torch.sigmoid(self.code_emb1(code_embedding))
         text_emb = torch.sigmoid(self.text_emb1(text_embedding))
-        exer_emb = torch.cat((exer_emb, code_emb), dim=1)
+        exer_emb = torch.add(alpha * text_emb, (1 - alpha) * exer_emb)
         e_discrimination = torch.sigmoid(self.e_discrimination(exer_id)) * 10
 
         # 交互函数
@@ -158,6 +152,14 @@ class MyDataSet(Dataset):
 
 
 def train():
+    if not os.path.exists(evalPath + '/' +str(alpha) + '/snapshot'):
+        os.makedirs(evalPath + '/' +str(alpha) + '/snapshot')
+    with open(evalPath + '/param.txt', 'a', encoding='utf8') as f:
+        f.write('v2\n')
+        f.write('learn_rate= %f, epoch= %d, batch_size= %d, shuffle= %s, alpha = %s \n' % (
+        lr, epoch, batch_size, shuffle, alpha))
+        f.write('text_embedding与exer_embedding 加权和')
+
     train_set = MyDataSet(dataPath + "/train_set.json")
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle)
 
@@ -193,7 +195,7 @@ def train():
                 running_loss = 0.0
 
         validate(net, i + 1)
-        save_snapshot(net, snapPath + "/epoch_" + str(i + 1))
+        save_snapshot(net, evalPath + "/" + str(alpha) + "/snapshot/epoch_" + str(i + 1))
 
 
 def validate(net, ep):
@@ -226,7 +228,7 @@ def validate(net, ep):
     # compute AUC
     auc = roc_auc_score(label_all, pred_all)
     print('epoch= %d, accuracy= %f, rmse= %f, auc= %f' % (ep, accuracy, rmse, auc))
-    with open(evalPath + '/val.txt', 'a', encoding='utf8') as f:
+    with open(evalPath + '/'+str(alpha)+'/val.txt', 'a', encoding='utf8') as f:
         f.write('epoch= %d, accuracy= %f, rmse= %f, auc= %f\n' % (ep, accuracy, rmse, auc))
 
 
@@ -237,4 +239,6 @@ def save_snapshot(model, filename):
 
 
 if __name__ == '__main__':
-    train()
+    for i in range(1, 10):
+        alpha = i * 0.1
+        train()

@@ -47,6 +47,7 @@ def generate_records(uid2num, exer2kn):
     1. 将用户id转为用户编号
     2. 存入题目对应知识点概念列表
     3. 过滤掉不需要的列信息
+    4. 分数修改，将得分小于1的置为0
      :return: records:exer_id,user_id,result,score,code,knowledge_code
     """
     # 处理学员提交记录数据_去掉0号题.csv文件，保留用户代码，将用户id转为用户编号，保存题目对应的知识点列表
@@ -57,6 +58,7 @@ def generate_records(uid2num, exer2kn):
             columns={'问题id': 'exer_id', '学员id': 'user_id', '判题结果': 'result', '用例正确率': 'score', '源代码': 'code'})
         df['user_id'] = df['user_id'].apply(lambda x: uid2num[x])
         df['knowledge_code'] = df['exer_id'].apply(lambda x: exer2kn.get(x, []))
+        df['score'] = df['score'].apply(lambda x: 0 if x < 1 else x)
         records = df.to_dict(orient='records')
     return records
 
@@ -269,7 +271,7 @@ def te():
 
 
 if __name__ == '__main__':
-    # create_records()
+    create_records()
     # show_data()
     clean_data()
     format_data()

@@ -124,7 +124,7 @@ class MyDataSet(Dataset):
 
 def train():
     train_set = MyDataSet(dataPath + "/train_set.json")
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle, num_workers=6)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle)
 
     net = Net().to(device)
     optimizer = optim.Adam(net.parameters(), lr=lr)
@@ -162,7 +162,7 @@ def train():
 
 def validate(net, ep):
     val_set = MyDataSet(dataPath + "/val_set.json")
-    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=shuffle, num_workers=6)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=shuffle)
     net.eval()
 
     correct_count, exer_count = 0, 0
