@@ -88,7 +88,7 @@ class Net(nn.Module):
 
         code_emb = torch.sigmoid(self.code_emb1(code_embedding))
         text_emb = torch.sigmoid(self.text_emb1(text_embedding))
-        exer_emb = torch.add(alpha * text_emb, (1 - alpha) * exer_emb)
+        exer_emb = torch.add(alpha * code_emb, (1 - alpha) * text_emb)
         e_discrimination = torch.sigmoid(self.e_discrimination(exer_id)) * 10
 
         # 交互函数
@@ -239,6 +239,6 @@ def save_snapshot(model, filename):
 
 
 if __name__ == '__main__':
-    for i in range(1, 10):
-        alpha = i * 0.1
+    for i in range(0, 11):
+        alpha = i * 0.2
         train()
